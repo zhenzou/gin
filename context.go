@@ -642,6 +642,15 @@ func (c *Context) ShouldBind(obj interface{}) error {
 	return c.ShouldBindWith(obj, b)
 }
 
+// ShouldBindAll bind all to obj
+func (c *Context) ShouldBindAll(obj interface{}) error {
+	m := make(map[string][]string)
+	for _, v := range c.Params {
+		m[v.Key] = []string{v.Value}
+	}
+	return binding.All.BindAll(c.Request, m, obj)
+}
+
 // ShouldBindJSON is a shortcut for c.ShouldBindWith(obj, binding.JSON).
 func (c *Context) ShouldBindJSON(obj interface{}) error {
 	return c.ShouldBindWith(obj, binding.JSON)
