@@ -1230,3 +1230,35 @@ func requestWithBody(method, path, body string) (req *http.Request) {
 	req, _ = http.NewRequest(method, path, bytes.NewBufferString(body))
 	return
 }
+
+func TestBindingAll(t *testing.T) {
+	testAllBindingAll(t,
+		All,
+		"/test?name=test", "/test",
+		`{"foo": "bar"}`, `{"bar": "foo"}`)
+}
+
+func testAllBindingAll(t *testing.T, b BindingAll, path, badPath, body, badBody string) {
+	type Request = struct {
+		ID     int       `from:"param" param:"id"`
+		Name   string    `from:"query" query:"name"`
+		FooBar FooStruct `from:"body"`
+	}
+
+	obj := Request{}
+	req := requestWithBody("POST", path, body)
+
+	err := b.BindAll(req, map[string][]string{
+		"id": {"100"},
+	}, &obj)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "bar", obj.FooBar.Foo)
+	assert.Equal(t, 100, obj.ID)
+	assert.Equal(t, "test", obj.Name)
+
+	obj = Request{}
+	req = requestWithBody("POST", badPath, badBody)
+	err = b.BindAll(req, nil, &obj)
+	assert.Error(t, err)
+}
