@@ -7,15 +7,15 @@ import (
 
 func Test_extractBindingArgs(t *testing.T) {
 	type Request1 struct {
-		ID string `from:"param" param:"id"`
+		ID string `in:"param" param:"id"`
 	}
 	type Request2 struct {
 		Person struct {
 			Name string `json:"name"`
-		} `from:"body"`
+		} `in:"body"`
 	}
 	type Request3 struct {
-		Authorization string `from:"header" header:"Authorization"`
+		Authorization string `in:"header" header:"Authorization"`
 	}
 
 	type args struct {
