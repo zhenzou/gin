@@ -1,12 +1,13 @@
 package binding
 
 import (
-	"github.com/gin-gonic/gin/internal/json"
 	"go/ast"
 	"io/ioutil"
 	"net/http"
 	"reflect"
 	"sync"
+
+	"github.com/gin-gonic/gin/internal/json"
 )
 
 type allBinding struct {
@@ -125,7 +126,7 @@ func extractBindingArgs(typ reflect.Type) bindingArgs {
 		if !ast.IsExported(field.Name) {
 			continue
 		}
-		from := field.Tag.Get("from")
+		from := field.Tag.Get("in")
 
 		switch from {
 		case "body":
