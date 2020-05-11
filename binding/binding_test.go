@@ -1240,9 +1240,9 @@ func TestBindingAll(t *testing.T) {
 
 func testAllBindingAll(t *testing.T, b BindingAll, path, badPath, body, badBody string) {
 	type Request = struct {
-		ID     int       `from:"param" param:"id"`
-		Name   string    `from:"query" query:"name"`
-		FooBar FooStruct `from:"body"`
+		ID     int       `in:"param" param:"id"`
+		Name   string    `in:"query" query:"name"`
+		FooBar FooStruct `in:"body"`
 	}
 
 	obj := Request{}
