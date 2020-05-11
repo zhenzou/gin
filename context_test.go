@@ -1948,3 +1948,26 @@ func TestContextWithKeysMutex(t *testing.T) {
 	assert.Nil(t, value)
 	assert.False(t, err)
 }
+
+type FooBarBinder struct {
+	Foo string `json:"foo"`
+	Bar string `json:"bar"`
+}
+
+func (f *FooBarBinder) Bind(c *Context) error {
+	f.Foo = c.Query("foo")
+	f.Bar = c.Query("bar")
+	return nil
+}
+
+func TestContextShouldBindBinder(t *testing.T) {
+	c, _ := CreateTestContext(httptest.NewRecorder())
+	c.Request, _ = http.NewRequest("POST", "/test?foo=foo&bar=bar", nil)
+	c.Request.Header.Add("Content-Type", MIMEJSON)
+
+	obj := FooBarBinder{}
+	assert.NoError(t, c.ShouldBindAll(&obj))
+	assert.Equal(t, "bar", obj.Bar)
+	assert.Equal(t, "foo", obj.Foo)
+	assert.Empty(t, c.Errors)
+}

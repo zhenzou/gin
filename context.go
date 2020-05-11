@@ -649,6 +649,9 @@ func (c *Context) ShouldBind(obj interface{}) error {
 
 // ShouldBindAll bind all to obj
 func (c *Context) ShouldBindAll(obj interface{}) error {
+	if binder, ok := obj.(Binder); ok {
+		return binder.Bind(c)
+	}
 	m := make(map[string][]string)
 	for _, v := range c.Params {
 		m[v.Key] = []string{v.Value}
