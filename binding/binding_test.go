@@ -1234,7 +1234,7 @@ func requestWithBody(method, path, body string) (req *http.Request) {
 func TestBindingAll(t *testing.T) {
 	testAllBindingAll(t,
 		All,
-		"/test?name=test&limit=10", "/test",
+		"/test?name=test&limit=10&ids=1&ids=2&ids=3", "/test",
 		`{"foo": "bar"}`, `{"bar": "foo"}`)
 }
 
@@ -1244,6 +1244,7 @@ func testAllBindingAll(t *testing.T, b BindingAll, path, badPath, body, badBody 
 	}
 	type Request = struct {
 		Page
+		IDs    []string  `in:"query" query:"ids"`
 		ID     int       `in:"param" param:"id"`
 		Name   string    `in:"query" query:"name"`
 		FooBar FooStruct `in:"body"`
@@ -1261,6 +1262,7 @@ func testAllBindingAll(t *testing.T, b BindingAll, path, badPath, body, badBody 
 	assert.Equal(t, 100, obj.ID)
 	assert.Equal(t, "test", obj.Name)
 	assert.Equal(t, 10, obj.Limit)
+	assert.Equal(t, []string{"1", "2", "3"}, obj.IDs)
 
 	obj = Request{}
 	req = requestWithBody("POST", badPath, badBody)
