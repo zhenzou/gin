@@ -28,9 +28,30 @@ type bindingArgs struct {
 	Body   []string
 }
 
+func (b *bindingArgs) Merge(args bindingArgs) {
+	b.Form = mergeMap(b.Form, args.Form)
+	b.Param = mergeMap(b.Param, args.Param)
+	b.Query = mergeMap(b.Query, args.Query)
+	b.Header = mergeMap(b.Header, args.Header)
+	b.Body = append(b.Body, args.Body...)
+}
+
+func mergeMap(a, b map[string]string) map[string]string {
+	if a == nil {
+		a = map[string]string{}
+	}
+	for k, v := range b {
+		a[k] = v
+	}
+	return a
+}
+
 // BindAll will bind request
 func (a *allBinding) BindAll(request *http.Request, params map[string][]string, ptr interface{}) error {
 	typ := reflect.TypeOf(ptr)
+	if typ.Kind() != reflect.Ptr {
+		panic("bind target must be ptr")
+	}
 	value, ok := a.cache.Load(typ)
 	if ok {
 		return a.bindAll(request, value.(bindingArgs), params, ptr)
@@ -114,16 +135,20 @@ func (a *allBinding) trySetWithArgs(args map[string]string,
 // Bind will bind request
 func extractBindingArgs(typ reflect.Type) bindingArgs {
 	args := bindingArgs{}
-	if typ.Kind() != reflect.Ptr {
-		panic("bind target must be ptr")
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
 	}
-	typ = typ.Elem()
 	if typ.Kind() != reflect.Struct {
 		panic("bind target must be ptr of struct")
 	}
 	for i := typ.NumField() - 1; i >= 0; i-- {
 		field := typ.Field(i)
 		if !ast.IsExported(field.Name) {
+			continue
+		}
+		if field.Anonymous {
+			subArgs := extractBindingArgs(field.Type)
+			args.Merge(subArgs)
 			continue
 		}
 		from := field.Tag.Get("in")
