@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/gin-gonic/gin/internal/json"
@@ -18,27 +19,32 @@ func (a *allBinding) Name() string {
 	return "all"
 }
 
-// bindingArgs for allBinding
+// BindingStruct for allBinding
 // For now, support form, param, body, header only
-type bindingArgs struct {
-	Form   map[string]string
-	Param  map[string]string
-	Query  map[string]string
-	Header map[string]string
+type BindingStruct struct {
+	Form   map[string]BindingArgs
+	Param  map[string]BindingArgs
+	Query  map[string]BindingArgs
+	Header map[string]BindingArgs
 	Body   []string
 }
 
-func (b *bindingArgs) Merge(args bindingArgs) {
-	b.Form = mergeMap(b.Form, args.Form)
-	b.Param = mergeMap(b.Param, args.Param)
-	b.Query = mergeMap(b.Query, args.Query)
-	b.Header = mergeMap(b.Header, args.Header)
+type BindingArgs struct {
+	Key     string
+	options setOptions
+}
+
+func (b *BindingStruct) Merge(args BindingStruct) {
+	b.Form = mergeArgsMap(b.Form, args.Form)
+	b.Param = mergeArgsMap(b.Param, args.Param)
+	b.Query = mergeArgsMap(b.Query, args.Query)
+	b.Header = mergeArgsMap(b.Header, args.Header)
 	b.Body = append(b.Body, args.Body...)
 }
 
-func mergeMap(a, b map[string]string) map[string]string {
+func mergeArgsMap(a, b map[string]BindingArgs) map[string]BindingArgs {
 	if a == nil {
-		a = map[string]string{}
+		a = map[string]BindingArgs{}
 	}
 	for k, v := range b {
 		a[k] = v
@@ -54,15 +60,15 @@ func (a *allBinding) BindAll(request *http.Request, params map[string][]string, 
 	}
 	value, ok := a.cache.Load(typ)
 	if ok {
-		return a.bindAll(request, value.(bindingArgs), params, ptr)
+		return a.bindAll(request, value.(BindingStruct), params, ptr)
 	}
-	args := extractBindingArgs(typ)
+	args := buildBindingStruct(typ)
 	a.cache.Store(typ, args)
 	return a.bindAll(request, args, params, ptr)
 }
 
 // bindAll will bind request
-func (a *allBinding) bindAll(req *http.Request, args bindingArgs,
+func (a *allBinding) bindAll(req *http.Request, args BindingStruct,
 	params map[string][]string, ptr interface{}) error {
 	typ := reflect.TypeOf(ptr).Elem()
 	value := reflect.ValueOf(ptr).Elem()
@@ -108,38 +114,35 @@ func (a *allBinding) bindAll(req *http.Request, args bindingArgs,
 				return err
 			}
 		}
-
 	}
 	return validate(ptr)
 }
 
 // Bind will bind request
-func (a *allBinding) trySetWithArgs(args map[string]string,
+func (a *allBinding) trySetWithArgs(args map[string]BindingArgs,
 	values map[string][]string, typ reflect.Type, value reflect.Value) error {
 	if values == nil {
 		return nil
 	}
-	for f, key := range args {
-		vs, ok := values[key]
-		if ok {
-			field, _ := typ.FieldByName(f)
-			err := setWithProperType(vs[0], value.FieldByName(f), field)
-			if err != nil {
-				return err
-			}
+	for f, arg := range args {
+		fv := value.FieldByName(f)
+		ft, _ := typ.FieldByName(f)
+		_, err := setByForm(fv, ft, values, arg.Key, arg.options)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// Bind will bind request
-func extractBindingArgs(typ reflect.Type) bindingArgs {
-	args := bindingArgs{}
+// buildBindingStruct
+func buildBindingStruct(typ reflect.Type) BindingStruct {
+	bindingStruct := BindingStruct{}
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
 	if typ.Kind() != reflect.Struct {
-		panic("bind target must be ptr of struct")
+		panic("binding target must be ptr of struct")
 	}
 	for i := typ.NumField() - 1; i >= 0; i-- {
 		field := typ.Field(i)
@@ -147,53 +150,87 @@ func extractBindingArgs(typ reflect.Type) bindingArgs {
 			continue
 		}
 		if field.Anonymous {
-			subArgs := extractBindingArgs(field.Type)
-			args.Merge(subArgs)
+			subArgs := buildBindingStruct(field.Type)
+			bindingStruct.Merge(subArgs)
 			continue
 		}
 		from := field.Tag.Get("in")
 
+		var m map[string]BindingArgs
+		var taged bool
+		var args BindingArgs
+
 		switch from {
 		case "body":
-			args.Body = append(args.Body, field.Name)
+			bindingStruct.Body = append(bindingStruct.Body, field.Name)
 		case "form":
-			key := field.Tag.Get("form")
-			if key == "-" {
-				continue
+			if bindingStruct.Form == nil {
+				bindingStruct.Form = map[string]BindingArgs{}
 			}
-			if args.Form == nil {
-				args.Form = map[string]string{}
-			}
-			args.Form[field.Name] = key
+			m = bindingStruct.Form
+			args, taged = extractBindingArgs(field, "form")
 		case "header":
-			key := field.Tag.Get("header")
-			if key == "-" {
-				continue
+			if bindingStruct.Header == nil {
+				bindingStruct.Header = map[string]BindingArgs{}
 			}
-			if args.Header == nil {
-				args.Header = map[string]string{}
-			}
-			args.Header[field.Name] = key
+			m = bindingStruct.Header
+			args, taged = extractBindingArgs(field, "header")
+
 		case "param":
-			key := field.Tag.Get("param")
-			if key == "-" {
-				continue
+			if bindingStruct.Param == nil {
+				bindingStruct.Param = map[string]BindingArgs{}
 			}
-			if args.Param == nil {
-				args.Param = map[string]string{}
+			m = bindingStruct.Param
+			args, taged = extractBindingArgs(field, "param")
+
+		case "path":
+			if bindingStruct.Param == nil {
+				bindingStruct.Param = map[string]BindingArgs{}
 			}
-			args.Param[field.Name] = key
+			m = bindingStruct.Param
+			args, taged = extractBindingArgs(field, "path")
+
 		case "query":
-			key := field.Tag.Get("query")
-			if key == "-" {
-				continue
+			if bindingStruct.Query == nil {
+				bindingStruct.Query = map[string]BindingArgs{}
 			}
-			if args.Query == nil {
-				args.Query = map[string]string{}
-			}
-			args.Query[field.Name] = key
+			m = bindingStruct.Query
+			args, taged = extractBindingArgs(field, "query")
+		default:
+			// just ignore
+			// force to tag args
 		}
 
+		if taged && m != nil {
+			m[field.Name] = args
+		}
 	}
-	return args
+	return bindingStruct
+}
+
+func extractBindingArgs(field reflect.StructField, tagName string) (BindingArgs, bool) {
+	args := BindingArgs{}
+
+	tagValue := field.Tag.Get(tagName)
+	tagValue = strings.TrimSpace(tagValue)
+	if tagValue == "-" {
+		return args, false
+	}
+	tagValue, opts := head(tagValue, ",")
+
+	if tagValue == "" { // default value is FieldName
+		tagValue = field.Name
+	}
+	args.Key = tagValue
+
+	var opt string
+	for len(opts) > 0 {
+		opt, opts = head(opts, ",")
+
+		if k, v := head(opt, "="); k == "default" {
+			args.options.isDefaultExists = true
+			args.options.defaultValue = v
+		}
+	}
+	return args, true
 }
