@@ -647,8 +647,8 @@ func (c *Context) ShouldBind(obj interface{}) error {
 	return c.ShouldBindWith(obj, b)
 }
 
-// ShouldBindAll bind all to obj
-func (c *Context) ShouldBindAll(obj interface{}) error {
+// ShouldBindRequest bind all request info to obj
+func (c *Context) ShouldBindRequest(obj interface{}) error {
 	if binder, ok := obj.(Binder); ok {
 		return binder.Bind(c)
 	}
@@ -656,7 +656,7 @@ func (c *Context) ShouldBindAll(obj interface{}) error {
 	for _, v := range c.Params {
 		m[v.Key] = []string{v.Value}
 	}
-	return binding.All.BindAll(c.Request, m, obj)
+	return binding.Request.BindRequest(c.Request, m, obj)
 }
 
 // ShouldBindJSON is a shortcut for c.ShouldBindWith(obj, binding.JSON).

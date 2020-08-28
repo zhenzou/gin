@@ -1233,7 +1233,7 @@ func requestWithBody(method, path, body string) (req *http.Request) {
 
 func TestBindingAll(t *testing.T) {
 	testAllBindingAll(t,
-		All,
+		Request,
 		"/test?name=test&limit=10&ids=1&ids=2&ids=3", "/test",
 		`{"foo": "bar"}`, `{"bar": "foo"}`)
 }
@@ -1253,7 +1253,7 @@ func testAllBindingAll(t *testing.T, b BindingAll, path, badPath, body, badBody 
 	obj := Request{}
 	req := requestWithBody("POST", path, body)
 
-	err := b.BindAll(req, map[string][]string{
+	err := b.BindRequest(req, map[string][]string{
 		"id": {"100"},
 	}, &obj)
 
@@ -1266,6 +1266,6 @@ func testAllBindingAll(t *testing.T, b BindingAll, path, badPath, body, badBody 
 
 	obj = Request{}
 	req = requestWithBody("POST", badPath, badBody)
-	err = b.BindAll(req, nil, &obj)
+	err = b.BindRequest(req, nil, &obj)
 	assert.Error(t, err)
 }

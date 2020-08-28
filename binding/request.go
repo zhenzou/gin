@@ -11,30 +11,32 @@ import (
 	"github.com/gin-gonic/gin/internal/json"
 )
 
-type allBinding struct {
+// requestBinding binding all request info
+// include body,form,query header,path
+type requestBinding struct {
 	cache sync.Map
 }
 
-func (a *allBinding) Name() string {
+func (a *requestBinding) Name() string {
 	return "all"
 }
 
-// BindingStruct for allBinding
-// For now, support form, param, body, header only
-type BindingStruct struct {
-	Form   map[string]BindingArgs
-	Param  map[string]BindingArgs
-	Query  map[string]BindingArgs
-	Header map[string]BindingArgs
+// requestBindingStruct for requestBinding to cache binding config
+// For now, support form, path, body, header only
+type requestBindingStruct struct {
+	Form   map[string]requestBindingArgs // fieldName -> binding args
+	Param  map[string]requestBindingArgs
+	Query  map[string]requestBindingArgs
+	Header map[string]requestBindingArgs
 	Body   []string
 }
 
-type BindingArgs struct {
+type requestBindingArgs struct {
 	Key     string
 	options setOptions
 }
 
-func (b *BindingStruct) Merge(args BindingStruct) {
+func (b *requestBindingStruct) Merge(args requestBindingStruct) {
 	b.Form = mergeArgsMap(b.Form, args.Form)
 	b.Param = mergeArgsMap(b.Param, args.Param)
 	b.Query = mergeArgsMap(b.Query, args.Query)
@@ -42,9 +44,9 @@ func (b *BindingStruct) Merge(args BindingStruct) {
 	b.Body = append(b.Body, args.Body...)
 }
 
-func mergeArgsMap(a, b map[string]BindingArgs) map[string]BindingArgs {
+func mergeArgsMap(a, b map[string]requestBindingArgs) map[string]requestBindingArgs {
 	if a == nil {
-		a = map[string]BindingArgs{}
+		a = map[string]requestBindingArgs{}
 	}
 	for k, v := range b {
 		a[k] = v
@@ -52,23 +54,23 @@ func mergeArgsMap(a, b map[string]BindingArgs) map[string]BindingArgs {
 	return a
 }
 
-// BindAll will bind request
-func (a *allBinding) BindAll(request *http.Request, params map[string][]string, ptr interface{}) error {
+// BindRequest will bind request to ptr
+func (a *requestBinding) BindRequest(request *http.Request, params map[string][]string, ptr interface{}) error {
 	typ := reflect.TypeOf(ptr)
 	if typ.Kind() != reflect.Ptr {
 		panic("bind target must be ptr")
 	}
 	value, ok := a.cache.Load(typ)
 	if ok {
-		return a.bindAll(request, value.(BindingStruct), params, ptr)
+		return a.bindRequest(request, value.(requestBindingStruct), params, ptr)
 	}
 	args := buildBindingStruct(typ)
 	a.cache.Store(typ, args)
-	return a.bindAll(request, args, params, ptr)
+	return a.bindRequest(request, args, params, ptr)
 }
 
-// bindAll will bind request
-func (a *allBinding) bindAll(req *http.Request, args BindingStruct,
+// bindRequest will bind request
+func (a *requestBinding) bindRequest(req *http.Request, args requestBindingStruct,
 	params map[string][]string, ptr interface{}) error {
 	typ := reflect.TypeOf(ptr).Elem()
 	value := reflect.ValueOf(ptr).Elem()
@@ -118,8 +120,7 @@ func (a *allBinding) bindAll(req *http.Request, args BindingStruct,
 	return validate(ptr)
 }
 
-// Bind will bind request
-func (a *allBinding) trySetWithArgs(args map[string]BindingArgs,
+func (a *requestBinding) trySetWithArgs(args map[string]requestBindingArgs,
 	values map[string][]string, typ reflect.Type, value reflect.Value) error {
 	if values == nil {
 		return nil
@@ -136,8 +137,8 @@ func (a *allBinding) trySetWithArgs(args map[string]BindingArgs,
 }
 
 // buildBindingStruct
-func buildBindingStruct(typ reflect.Type) BindingStruct {
-	bindingStruct := BindingStruct{}
+func buildBindingStruct(typ reflect.Type) requestBindingStruct {
+	bindingStruct := requestBindingStruct{}
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
@@ -154,53 +155,46 @@ func buildBindingStruct(typ reflect.Type) BindingStruct {
 			bindingStruct.Merge(subArgs)
 			continue
 		}
-		from := field.Tag.Get("in")
+		in := field.Tag.Get("in")
 
-		var m map[string]BindingArgs
+		var m map[string]requestBindingArgs
 		var taged bool
-		var args BindingArgs
+		var args requestBindingArgs
 
-		switch from {
+		switch in {
 		case "body":
 			bindingStruct.Body = append(bindingStruct.Body, field.Name)
+			// no need to do anything else
+			continue
 		case "form":
 			if bindingStruct.Form == nil {
-				bindingStruct.Form = map[string]BindingArgs{}
+				bindingStruct.Form = map[string]requestBindingArgs{}
 			}
 			m = bindingStruct.Form
-			args, taged = extractBindingArgs(field, "form")
+
 		case "header":
 			if bindingStruct.Header == nil {
-				bindingStruct.Header = map[string]BindingArgs{}
+				bindingStruct.Header = map[string]requestBindingArgs{}
 			}
 			m = bindingStruct.Header
-			args, taged = extractBindingArgs(field, "header")
 
-		case "param":
+		case "param", "path":
 			if bindingStruct.Param == nil {
-				bindingStruct.Param = map[string]BindingArgs{}
+				bindingStruct.Param = map[string]requestBindingArgs{}
 			}
 			m = bindingStruct.Param
-			args, taged = extractBindingArgs(field, "param")
-
-		case "path":
-			if bindingStruct.Param == nil {
-				bindingStruct.Param = map[string]BindingArgs{}
-			}
-			m = bindingStruct.Param
-			args, taged = extractBindingArgs(field, "path")
-
 		case "query":
 			if bindingStruct.Query == nil {
-				bindingStruct.Query = map[string]BindingArgs{}
+				bindingStruct.Query = map[string]requestBindingArgs{}
 			}
 			m = bindingStruct.Query
-			args, taged = extractBindingArgs(field, "query")
 		default:
 			// just ignore
 			// force to tag args
+			continue
 		}
 
+		args, taged = extractBindingArgs(field, in)
 		if taged && m != nil {
 			m[field.Name] = args
 		}
@@ -208,8 +202,8 @@ func buildBindingStruct(typ reflect.Type) BindingStruct {
 	return bindingStruct
 }
 
-func extractBindingArgs(field reflect.StructField, tagName string) (BindingArgs, bool) {
-	args := BindingArgs{}
+func extractBindingArgs(field reflect.StructField, tagName string) (requestBindingArgs, bool) {
+	args := requestBindingArgs{}
 
 	tagValue := field.Tag.Get(tagName)
 	tagValue = strings.TrimSpace(tagValue)

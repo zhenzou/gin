@@ -47,7 +47,7 @@ type BindingUri interface {
 
 type BindingAll interface {
 	Name() string
-	BindAll(*http.Request, map[string][]string, interface{}) error
+	BindRequest(*http.Request, map[string][]string, interface{}) error
 }
 
 // StructValidator is the minimal interface which needs to be implemented in
@@ -86,7 +86,7 @@ var (
 	YAML          = yamlBinding{}
 	Uri           = uriBinding{}
 	Header        = headerBinding{}
-	All           = &allBinding{}
+	Request       = &requestBinding{}
 )
 
 // Default returns the appropriate Binding instance based on the HTTP method

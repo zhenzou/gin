@@ -1966,7 +1966,7 @@ func TestContextShouldBindBinder(t *testing.T) {
 	c.Request.Header.Add("Content-Type", MIMEJSON)
 
 	obj := FooBarBinder{}
-	assert.NoError(t, c.ShouldBindAll(&obj))
+	assert.NoError(t, c.ShouldBindRequest(&obj))
 	assert.Equal(t, "bar", obj.Bar)
 	assert.Equal(t, "foo", obj.Foo)
 	assert.Empty(t, c.Errors)

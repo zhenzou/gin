@@ -27,13 +27,13 @@ func Test_extractBindingArgs(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want BindingStruct
+		want requestBindingStruct
 	}{
 		{
 			name: "args.Param should have id key when ID taged",
 			args: args{reflect.TypeOf(&Request1{})},
-			want: BindingStruct{
-				Param: map[string]BindingArgs{
+			want: requestBindingStruct{
+				Param: map[string]requestBindingArgs{
 					"ID": {
 						Key: "id",
 					},
@@ -42,15 +42,15 @@ func Test_extractBindingArgs(t *testing.T) {
 		{
 			name: "args.Boody should have person key when Person taged",
 			args: args{reflect.TypeOf(&Request2{})},
-			want: BindingStruct{
+			want: requestBindingStruct{
 				Body: []string{"Person"},
 			},
 		},
 		{
 			name: "args.Header should have Authorization key when Authorization taged",
 			args: args{reflect.TypeOf(&Request3{})},
-			want: BindingStruct{
-				Header: map[string]BindingArgs{
+			want: requestBindingStruct{
+				Header: map[string]requestBindingArgs{
 					"Authorization": {
 						Key: "Authorization",
 					},
@@ -59,8 +59,8 @@ func Test_extractBindingArgs(t *testing.T) {
 		{
 			name: "args.Query should have Limit key when Limit taged",
 			args: args{reflect.TypeOf(&Request4{})},
-			want: BindingStruct{
-				Query: map[string]BindingArgs{
+			want: requestBindingStruct{
+				Query: map[string]requestBindingArgs{
 					"Limit": {
 						Key: "limit",
 						options: setOptions{
